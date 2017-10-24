@@ -1,5 +1,5 @@
 <?php
-function asdf($x) { file_put_contents('php://stdout', PHP_EOL.var_dump($x).PHP_EOL);}
+function asdf($x) { file_put_contents('php://stdout', PHP_EOL.$x.PHP_EOL);}
 if (!defined('_PS_VERSION_'))
   exit;
 class Savemypaquet extends CarrierModule {
@@ -7,7 +7,7 @@ class Savemypaquet extends CarrierModule {
   private $SMP_API_URL = 'https://savemp-3ebdc.firebaseio.com/';
   private $SMP_API_KEY = 'AIzaSyA6M3yWxezMTRAD5Ixk2CGjX1F2hezxOvQ';
   private $ITV3_URL =  "https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key=";
-  private $carriers = [
+  private $CARRIERS = [
     'SMP_OPTI_48H' => [
       'name' => 'SaveMyPaquet Optimum 48h',
       'fees' => [
@@ -65,11 +65,11 @@ class Savemypaquet extends CarrierModule {
     $addr = new Address($params->id_address_delivery);
     $iso = (new Country($addr->id_country))->iso_code;
     $codes = array(75, 77, 78, 91, 92, 93, 94, 95);
-    foreach($params->getProducts() as $p) if ($p['weight'] == 0) return false;
+    // TODO reenable weight check
+    // foreach($params->getProducts() as $p) if ($p['weight'] == 0) return false;
     if ($iso !== 'FR' || !in_array(substr($addr->postcode, 0, 2), $codes)) return false;
     $sum = array_sum(array_map(function ($x) { return $x['weight']; }, $params->getProducts()));
-    asdf("id_carrier = {$params->id_carrier}");
-    foreach ($this->CARRIERS['SMP_OPTI_48h']->fees as $w => $c) if ($sum <= $w) return $c;
+    foreach ($this->CARRIERS['SMP_OPTI_48H']['fees'] as $w => $c) if ($sum <= $w) return $c;
   }
   public function getOrderShippingCostExternal($params) {
     return $this->getOrderShippingCost($params, 0);
