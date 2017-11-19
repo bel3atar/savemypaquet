@@ -187,7 +187,10 @@ class Savemypaquet extends CarrierModule {
     curl_exec($c);
   }
   public function hookDisplayCarrierExtraContent($sutff) {
-    Context::getContext()->controller->addJS($this->_path . 'views/js/test.js');
+    $this->context->controller->addJquery();
+    asdf(file_get_contents('.' . $this->_path . 'views/js/test.js'));
+    $this->context->controller->addJS('.' . $this->_path . 'views/js/test.js');
+
     $this->context->smarty->assign('smpid', Configuration::get('SMP_CARRIER_ID'));
     $phone = (new Address($this->context->cart->id_address_delivery))->phone;
     $this->context->smarty->assign('phone', $phone);
