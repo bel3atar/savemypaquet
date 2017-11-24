@@ -4,9 +4,6 @@ if (!defined('_PS_VERSION_'))
   exit;
 class Savemypaquet extends CarrierModule {
   // configuration constants
-  private $SMP_API_URL = 'https://savemp-3ebdc.firebaseio.com/';
-  private $SMP_API_KEY = 'AIzaSyA6M3yWxezMTRAD5Ixk2CGjX1F2hezxOvQ';
-  private $ITV3_URL =  "https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key=";
   private $CARRIERS = [
     'SMP_OPTI_48H' => [
       'name' => 'SaveMyPaquet Optimum 48h',
@@ -60,6 +57,7 @@ class Savemypaquet extends CarrierModule {
     $this->displayName = $this->l('Save My Paquet');
     $this->description = $this->l('Ajouter SaveMyPaquet aux modes de livraison.');
     $this->confirmUninstall = $this->l('Êtes-vous sûrs de vouloir désinstaller ce module?');
+    asdf($this->context->controller->php_self);
   }
   public function getOrderShippingCost($params, $shipping_cost) {
     $addr = new Address($params->id_address_delivery);
@@ -83,6 +81,7 @@ class Savemypaquet extends CarrierModule {
       return false;
     if (!$this->registerHook('actionCarrierUpdate')
       || !$this->registerHook('actionValidateOrder')
+      || !$this->registerHook('actionFrontControllerSetMedia')
       || !$this->registerHook('displayCarrierExtraContent'))
       return false;
     $carrier = $this->addCarrier();
@@ -147,20 +146,9 @@ class Savemypaquet extends CarrierModule {
       return false;
     }
   }
-  private function authenticate() {
-    $c = curl_init($this->ITV3_URL . $this->SMP_API_KEY);
-    curl_setopt_array($c, [
-      CURLOPT_POST => TRUE,
-      CURLOPT_RETURNTRANSFER => TRUE,
-      CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-      CURLOPT_POSTFIELDS => json_encode(['email' =>  Configuration::get('SMP_LOGIN'),
-        'password' => Configuration::get('SMP_PASSWORD'),
-        'returnSecureToken' => TRUE])
-    ]);
-    return json_decode(curl_exec($c));
-  }
   public function hookActionValidateOrder($params) 
   {
+    print_r($params) and die();
     if ($params['order']->id_carrier !== (int)Configuration::get('SMP_CARRIER_ID')) return;
     $auth = $this->authenticate();
     if (property_exists($auth, 'error')) die("Erreur d'authentification Save My Paquet, veuillez contacter l'administrateur du site.");
@@ -188,9 +176,6 @@ class Savemypaquet extends CarrierModule {
   }
   public function hookDisplayCarrierExtraContent($sutff) {
     $this->context->controller->addJquery();
-    asdf(file_get_contents('.' . $this->_path . 'views/js/test.js'));
-    $this->context->controller->addJS('.' . $this->_path . 'views/js/test.js');
-
     $this->context->smarty->assign('smpid', Configuration::get('SMP_CARRIER_ID'));
     $phone = (new Address($this->context->cart->id_address_delivery))->phone;
     $this->context->smarty->assign('phone', $phone);
@@ -213,4 +198,9 @@ class Savemypaquet extends CarrierModule {
     $this->context->smarty->assign('SMP_PASSWORD', Configuration::get('SMP_PASSWORD'));
     return $this->display(__FILE__, 'getContent.tpl');
   }
+  public function hookActionFrontControllerSetMedia($params) {
+    if ('order' === $this->context->controller->php_self) {
+			$this->context->controller->registerJavascript('smpjavascriptfile','modules/'.$this->name.'/script.js');
+		}
+	}
 }

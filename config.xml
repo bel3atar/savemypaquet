@@ -9,5 +9,5 @@
 	<confirmUninstall><![CDATA[Êtes-vous sûrs de vouloir désinstaller ce module?]]></confirmUninstall>
     <is_configurable>1</is_configurable>
     <need_instance>0</need_instance>
-	<limited_countries></limited_countries>
+	<limited_countries>fr</limited_countries>
 </module>
