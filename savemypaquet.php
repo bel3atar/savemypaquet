@@ -1,73 +1,63 @@
 <?php
-function asdf($x) { file_put_contents('php://stdout', PHP_EOL.$x.PHP_EOL);}
-if (!defined('_PS_VERSION_'))
-  exit;
+if (!defined('_PS_VERSION_')) exit;
 class Savemypaquet extends CarrierModule {
-  // configuration constants
+  public $id_carrier;
   private $CARRIERS = [
     'SMP_OPTI_48H' => [
       'name' => 'SaveMyPaquet Optimum 48h',
+      'delay' => 'Recevez votre colis en 48h',
       'fees' => [
-        0.25 => 5.99,
-        0.5 => 6.99,
-        0.75 => 7.99,
-        1 => 8.99,
-        2 => 9.99,
-        5 => 14.99,
-        10 => 19.99,
-        30 => 29.99
+        [0.01, 0.25, 5.99],
+        [0.25, 0.50, 6.99],
+        [0.50, 0.75, 7.99],
+        [0.75, 1.00, 8.99],
+        [1.00, 2.00, 9.99],
+        [2.00, 5.00, 14.99],
+        [5.00, 10.00, 19.99],
+        [10.00, 30.00,  29.99]
       ]
     ],
     'SMP_PREM_48H' => [
       'name' => 'SaveMyPaquet Premium avec suivi et preuve de livraison en 48h',
+      'delay' => 'Recevez votre colis en 48h',
       'fees' => [
-        0.25 => 6.99,
-        0.5 => 7.99,
-        0.75 => 8.99,
-        1 => 9.99,
-        2 => 10.99,
-        5 => 15.99,
-        10 => 20.99,
-        30 => 30.99
+        [0.01, 0.25, 6.99],
+        [0.25, 0.50, 7.99],
+        [0.50, 0.75, 8.99],
+        [0.75, 1.00, 9.99],
+        [1.00, 2.00, 10.99],
+        [2.00, 5.00, 15.99],
+        [5.00, 10.00, 20.99],
+        [10.00, 30.00,  30.99]
       ]
     ],
     'SMP_PREM_24H' => [
       'name' => 'SaveMyPaquet Premium+ avec suivi et preuve de livraison en 24h',
+      'delay' => 'Recevez votre colis en 24h',
       'fees' => [
-        0.25 => 10.99,
-        0.5 => 11.99,
-        0.75 => 12.99,
-        1 => 13.99,
-        2 => 14.99,
-        5 => 22.99,
-        10 => 29.99,
-        30 => 50.99
+        [0.01, 0.25, 10.99],
+        [0.25, 0.50, 11.99],
+        [0.50, 0.75, 12.99],
+        [0.75, 1.00, 13.99],
+        [1.00, 2.00, 14.99],
+        [2.00, 5.00, 22.99],
+        [5.00, 10.00, 29.99],
+        [10.00, 30.00,  50.99]
       ]
     ]
   ];
   public function __construct() {
     $this->name = 'savemypaquet';
-    $this->version = '1.0';
-    $this->author = 'bel3atar';
-    $this->need_instance = 0;
-    $this->ps_versions_compliancy = array('min' => '1.7.1.2', 'max' => _PS_VERSION_); 
     $this->tab = 'shipping_logistics';
+    $this->version = '1.0';
+    $this->author = 'bel3atar hada';
+    $this->need_instance = 0;
+    $this->ps_versions_compliancy = array('min' => '1.6', 'max' => _PS_VERSION_); 
     $this->bootstrap = true;
     parent::__construct();
     $this->displayName = $this->l('Save My Paquet');
     $this->description = $this->l('Ajouter SaveMyPaquet aux modes de livraison.');
     $this->confirmUninstall = $this->l('Êtes-vous sûrs de vouloir désinstaller ce module?');
-    asdf($this->context->controller->php_self);
-  }
-  public function getOrderShippingCost($params, $shipping_cost) {
-    $addr = new Address($params->id_address_delivery);
-    $iso = (new Country($addr->id_country))->iso_code;
-    $codes = array(75, 77, 78, 91, 92, 93, 94, 95);
-    // TODO reenable weight check
-    // foreach($params->getProducts() as $p) if ($p['weight'] == 0) return false;
-    if ($iso !== 'FR' || !in_array(substr($addr->postcode, 0, 2), $codes)) return false;
-    $sum = array_sum(array_map(function ($x) { return $x['weight']; }, $params->getProducts()));
-    foreach ($this->CARRIERS['SMP_OPTI_48H']['fees'] as $w => $c) if ($sum <= $w) return $c;
   }
   public function getOrderShippingCostExternal($params) {
     return $this->getOrderShippingCost($params, 0);
@@ -84,24 +74,13 @@ class Savemypaquet extends CarrierModule {
       || !$this->registerHook('actionFrontControllerSetMedia')
       || !$this->registerHook('displayCarrierExtraContent'))
       return false;
-    $carrier = $this->addCarrier();
-    foreach (Zone::getZones() as $zone) $carrier->addZone($zone['id_zone']);
-    $this->addRanges($carrier);
-    $this->addGroups($carrier);
+    foreach ($this->CARRIERS as $key => $value) {
+      $carrier = $this->addCarrier($key, $value);
+      // foreach (Zone::getZones() as $zone) $carrier->addZone($zone['id_zone']);
+      $this->addRanges($carrier, $key, $value);
+      $this->addGroups($carrier);
+    }
     return true;
-  }
-  protected function addRanges($carrier) {
-    $range_price = new RangePrice();
-    $range_price->id_carrier = $carrier->id;
-    $range_price->delimiter1 = '0';
-    $range_price->delimiter2 = '10000';
-    $range_price->add();
-
-    $range_weight = new RangeWeight();
-    $range_weight->id_carrier = $carrier->id;
-    $range_weight->delimiter1 = '0';
-    $range_weight->delimiter2 = '10000';
-    $range_weight->add();
   }
   protected function addGroups($carrier)
   {
@@ -114,36 +93,78 @@ class Savemypaquet extends CarrierModule {
     $carrier->setGroups($groups_ids);
   }
   public function uninstall() {
-    $id = (int)Configuration::get('SMP_CARRIER_ID');
-    $carrier = new Carrier($id);
-    $carrier->delete();
-
+    foreach ($this->CARRIERS as $key => $value) {
+      $id = (int)Configuration::get($key);
+      $carrier = new Carrier($id);
+      $carrier->delete();
+    }
     if (!parent::uninstall())
       return false;
     return true;
   }
+  public function getOrderShippingCost($params, $shipping_cost) {
+    $carrierNames = array_keys($this->CARRIERS);
+    $carrierIds = array_combine(Configuration::getMultiple($carrierNames), $carrierNames);
+    if (!in_array($this->id_carrier, array_keys($carrierIds))) return false;
+    
 
-  protected function addCarrier()
+    $addr = new Address($params->id_address_delivery);
+    $iso = (new Country($addr->id_country))->iso_code;
+    $codes = array(75, 77, 78, 91, 92, 93, 94, 95);
+    if ($iso !== 'FR' || !in_array(substr($addr->postcode, 0, 2), $codes)) return false;
+    foreach($params->getProducts() as $p) if ($p['weight'] == 0) return false;
+
+    $carrier = new Carrier($this->id_carrier);
+    $totalWeight = array_sum(array_map(function ($x) { return $x['weight']; }, $params->getProducts()));
+
+
+    return $shipping_cost;
+  }
+  protected function addCarrier($id, $config)
   {
     $carrier = new Carrier();
-    $carrier->name = 'Save my paquet';
+    $carrier->name = $config['name'];
     $carrier->shipping_handling = false;
     $carrier->id_tax_rules_group = 0;
+    $carrier->range_behavior = true;
+
     $carrier->need_range = true;
     $carrier->is_module = true;
-    $carrier->shipping_external = true;
+    $carrier->shipping_external = true; // cost calculated by module?
     $carrier->external_module_name = $this->name;
-    foreach (Language::getLanguages() as $lang) {
-      if ($lang['iso_code'] == 'fr')
-        $carrier->delay[$lang['id_lang']] = 'Réception à domicile en votre absence en 48h, sécurisé contre le vol avec photo comme preuve de livraison. www.savemypaquet.com';
-      else $carrier->delay[$lang['id_lang']] = 'Shipping within 48 hours.';
-    }
+    foreach (Language::getLanguages() as $lang) $carrier->delay[$lang['id_lang']] = $config['delay'];
     if ($carrier->add() == true) {
       @copy(dirname(__FILE__).'/logo.png', _PS_SHIP_IMG_DIR_.'/'.(int)$carrier->id.'.jpg');
-      Configuration::updateValue('SMP_CARRIER_ID', (int)$carrier->id);
+      Configuration::updateValue($id, (int)$carrier->id);
       return $carrier;
     } else {
       return false;
+    }
+  }
+  protected function addRanges($carrier, $id, $config) {
+    $range_price = new RangePrice();
+    $range_price->id_carrier = $carrier->id;
+    $range_price->delimiter1 = '0';
+    $range_price->delimiter2 = '10000000';
+    $range_price->add();
+
+    $zones = Zone::getZones(true);
+    foreach ($config['fees'] as $fees) {
+      $range_weight = new RangeWeight();
+      $range_weight->id_carrier = $carrier->id;
+      $range_weight->delimiter1 = $fees[0];
+      $range_weight->delimiter2 = $fees[1];
+      $range_weight->add();
+      foreach ($zones as $zone) Db::getInstance()->insert('delivery', [
+        dump('adding zone id to carrier');
+        dump($zone['id_zone']);
+        'id_carrier' => $carrier->id,
+        'id_range_price' => null,
+        'id_range_weight' => (int)$range_weight->id,
+        'id_zone' => $zone['id_zone'],
+        'price' => $fees[2]
+      ]);
+
     }
   }
   public function hookActionValidateOrder($params) 
@@ -175,7 +196,6 @@ class Savemypaquet extends CarrierModule {
     curl_exec($c);
   }
   public function hookDisplayCarrierExtraContent($sutff) {
-    $this->context->controller->addJquery();
     $this->context->smarty->assign('smpid', Configuration::get('SMP_CARRIER_ID'));
     $phone = (new Address($this->context->cart->id_address_delivery))->phone;
     $this->context->smarty->assign('phone', $phone);
@@ -185,18 +205,10 @@ class Savemypaquet extends CarrierModule {
   {
     $id_carrier_old = (int)($params['id_carrier']);
     $id_carrier_new = (int)($params['carrier']->id);
-    if ($id_carrier_old == (int)(Configuration::get('SMP_CARRIER_ID')))
-      Configuration::updateValue('SMP_CARRIER_ID', $id_carrier_new);
-  }
-  public function getContent() {
-    if (Tools::isSubmit('savemypaquet_form_submit')) {
-      Configuration::updateValue('SMP_LOGIN', Tools::getValue('SMP_LOGIN'));
-      Configuration::updateValue('SMP_PASSWORD', Tools::getValue('SMP_PASSWORD'));
-      $this->context->smarty->assign('confirmation', 'ok');
-    }
-    $this->context->smarty->assign('SMP_LOGIN', Configuration::get('SMP_LOGIN'));
-    $this->context->smarty->assign('SMP_PASSWORD', Configuration::get('SMP_PASSWORD'));
-    return $this->display(__FILE__, 'getContent.tpl');
+    $carrierIds = array_keys($this->CARRIERS);
+    $carrierIds = array_combine(Configuration::getMultiple($carrierIds), $carrierIds);
+    if (array_key_exists($id_carrier_old, $carrierIds))
+      Configuration::updateValue($carrierIds[$id_carrier_old], $id_carrier_new);
   }
   public function hookActionFrontControllerSetMedia($params) {
     if ('order' === $this->context->controller->php_self) {
