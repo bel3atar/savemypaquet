@@ -2,6 +2,7 @@
 if (!defined('_PS_VERSION_')) exit;
 class Savemypaquet extends CarrierModule {
   public $id_carrier;
+  private $API_URL = 'https://api.savemypaquet.com/api';
   private $CARRIERS = [
     'SMP_OPTI_48H' => [
       'name' => 'SaveMyPaquet Optimum 48h',
@@ -47,10 +48,11 @@ class Savemypaquet extends CarrierModule {
     ]
   ];
   public function __construct() {
+
     $this->name = 'savemypaquet';
     $this->tab = 'shipping_logistics';
     $this->version = '1.0';
-    $this->author = 'bel3atar hada';
+    $this->author = 'bel3atar';
     $this->need_instance = 0;
     $this->ps_versions_compliancy = array('min' => '1.6', 'max' => _PS_VERSION_); 
     $this->bootstrap = true;
@@ -76,7 +78,7 @@ class Savemypaquet extends CarrierModule {
       return false;
     foreach ($this->CARRIERS as $key => $value) {
       $carrier = $this->addCarrier($key, $value);
-      // foreach (Zone::getZones() as $zone) $carrier->addZone($zone['id_zone']);
+      foreach (Zone::getZones(true) as $zone) Db::getInstance()->insert('carrier_zone', ['id_carrier' => (int)$carrier->id, 'id_zone' => (int)$zone['id_zone']]);
       $this->addRanges($carrier, $key, $value);
       $this->addGroups($carrier);
     }
@@ -86,10 +88,7 @@ class Savemypaquet extends CarrierModule {
   {
     $groups_ids = array();
     $groups = Group::getGroups(Context::getContext()->language->id);
-    foreach ($groups as $group) {
-      $groups_ids[] = $group['id_group'];
-    }
-
+    foreach ($groups as $group) $groups_ids[] = $group['id_group']; 
     $carrier->setGroups($groups_ids);
   }
   public function uninstall() {
@@ -115,10 +114,18 @@ class Savemypaquet extends CarrierModule {
     foreach($params->getProducts() as $p) if ($p['weight'] == 0) return false;
 
     $carrier = new Carrier($this->id_carrier);
-    $totalWeight = array_sum(array_map(function ($x) { return $x['weight']; }, $params->getProducts()));
+    $total_weight = array_sum(array_map(function ($x) { return $x['weight']; }, $params->getProducts()));
 
-
-    return $shipping_cost;
+    $sql = 'SELECT d.`price`
+      FROM `'._DB_PREFIX_.'delivery` d
+      LEFT JOIN `'._DB_PREFIX_.'range_weight` w ON (d.`id_range_weight` = w.`id_range_weight`)
+      WHERE '.(float) $total_weight.' >= w.`delimiter1`
+      AND '.(float) $total_weight.' < w.`delimiter2`
+      AND d.`id_carrier` = '.$carrier->id.'
+      AND id_range_price IS NOT NULL 
+      AND (id_shop IS NULL OR id_shop = '.(int)Context::getContext()->shop->id.')';
+    $result = Db::getInstance(_PS_USE_SQL_SLAVE_)->getRow($sql);
+    return $result['price'];
   }
   protected function addCarrier($id, $config)
   {
@@ -142,12 +149,6 @@ class Savemypaquet extends CarrierModule {
     }
   }
   protected function addRanges($carrier, $id, $config) {
-    $range_price = new RangePrice();
-    $range_price->id_carrier = $carrier->id;
-    $range_price->delimiter1 = '0';
-    $range_price->delimiter2 = '10000000';
-    $range_price->add();
-
     $zones = Zone::getZones(true);
     foreach ($config['fees'] as $fees) {
       $range_weight = new RangeWeight();
@@ -155,45 +156,11 @@ class Savemypaquet extends CarrierModule {
       $range_weight->delimiter1 = $fees[0];
       $range_weight->delimiter2 = $fees[1];
       $range_weight->add();
-      foreach ($zones as $zone) Db::getInstance()->insert('delivery', [
-        dump('adding zone id to carrier');
-        dump($zone['id_zone']);
-        'id_carrier' => $carrier->id,
-        'id_range_price' => null,
-        'id_range_weight' => (int)$range_weight->id,
-        'id_zone' => $zone['id_zone'],
-        'price' => $fees[2]
-      ]);
+      foreach ($zones as $zone) {
+        Db::getInstance()->insert('delivery', ['id_carrier' => $carrier->id, 'id_range_price' => NULL, 'id_range_weight' => (int)$range_weight->id, 'id_zone' => $zone['id_zone'], 'price' => $fees[2]]);
+      }
 
     }
-  }
-  public function hookActionValidateOrder($params) 
-  {
-    print_r($params) and die();
-    if ($params['order']->id_carrier !== (int)Configuration::get('SMP_CARRIER_ID')) return;
-    $auth = $this->authenticate();
-    if (property_exists($auth, 'error')) die("Erreur d'authentification Save My Paquet, veuillez contacter l'administrateur du site.");
-    $uid = $auth->localId;
-
-    $addr = new Address($params['cart']->id_address_delivery);
-    $c = curl_init($this->SMP_API_URL . "/orders.json?auth={$auth->idToken}");
-    curl_setopt_array($c, [
-      CURLOPT_POST => TRUE,
-      CURLOPT_POSTFIELDS => json_encode([
-        "seller"        => $auth->email,
-        "reference"     => $params['order']->reference,
-        "firstname"     => $addr->firstname,
-        "lastname"      => $addr->lastname,
-        "email"         => $params['customer']->email,
-        "addr1"         => $addr->address1,
-        "addr2"         => $addr->address2,
-        "postcode"      => $addr->postcode,
-        "city"          => $addr->city,
-        "phone"         => $addr->phone,
-        "phone_mobile"  => $addr->phone_mobile
-      ])
-    ]);
-    curl_exec($c);
   }
   public function hookDisplayCarrierExtraContent($sutff) {
     $this->context->smarty->assign('smpid', Configuration::get('SMP_CARRIER_ID'));
@@ -212,7 +179,34 @@ class Savemypaquet extends CarrierModule {
   }
   public function hookActionFrontControllerSetMedia($params) {
     if ('order' === $this->context->controller->php_self) {
-			$this->context->controller->registerJavascript('smpjavascriptfile','modules/'.$this->name.'/script.js');
-		}
-	}
+      $this->context->controller->registerJavascript('smpjavascriptfile','modules/'.$this->name.'/script.js');
+    }
+  }
+  public function hookActionValidateOrder($params) 
+  {
+    if ($params['order']->id_carrier !== (int)Configuration::get('SMP_CARRIER_ID')) return;
+    $auth = $this->authenticate();
+    if (property_exists($auth, 'error')) die("Erreur d'authentification Save My Paquet, veuillez contacter l'administrateur du site.");
+    $uid = $auth->localId;
+
+    $addr = new Address($params['cart']->id_address_delivery);
+    $c = curl_init($this->API_URL . "/orders.json?auth={$auth->idToken}");
+    curl_setopt_array($c, [
+      CURLOPT_POST => TRUE,
+      CURLOPT_POSTFIELDS => json_encode([
+        "seller"        => $auth->email,
+        "reference"     => $params['order']->reference,
+        "firstname"     => $addr->firstname,
+        "lastname"      => $addr->lastname,
+        "email"         => $params['customer']->email,
+        "addr1"         => $addr->address1,
+        "addr2"         => $addr->address2,
+        "postcode"      => $addr->postcode,
+        "city"          => $addr->city,
+        "phone"         => $addr->phone,
+        "phone_mobile"  => $addr->phone_mobile
+      ])
+    ]);
+    curl_exec($c);
+  }
 }
