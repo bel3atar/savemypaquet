@@ -132,6 +132,8 @@ class Savemypaquet extends CarrierModule {
   protected function addCarrier($id, $config)
   {
     $carrier = new Carrier();
+    $carrier->url = $this->API_URL . '/api/track?numero_Save_MyPaquet=@';
+    $carrier->grade = 9;
     $carrier->name = $config['name'];
     $carrier->shipping_handling = false;
     $carrier->id_tax_rules_group = 0;
