@@ -2,7 +2,7 @@
 if (!defined('_PS_VERSION_')) exit;
 class Savemypaquet extends CarrierModule {
   public $id_carrier;
-  private $API_URL = 'https://api.savemypaquet.com/api';
+  private $API_URL = 'https://testapi.savemypaquet.com/api';
   private $CARRIERS = [
     'SMP_OPTI_48H' => [
       'name' => 'SaveMyPaquet Optimum 48h',
@@ -125,7 +125,6 @@ class Savemypaquet extends CarrierModule {
       AND d.`id_carrier` = '.$carrier->id.'
       AND id_range_price IS NOT NULL 
       AND (id_shop = '.(int)Context::getContext()->shop->id.' OR id_shop IS NULL)';
-		dump($sql);
     $result = Db::getInstance(_PS_USE_SQL_SLAVE_)->getRow($sql);
     return $result['price'];
   }
@@ -193,15 +192,16 @@ class Savemypaquet extends CarrierModule {
     $c = curl_init($this->API_URL . "/colis/new");
     curl_setopt_array($c, [
       CURLOPT_POST => TRUE,
+      CURLOPT_VERBOSE => TRUE,
       CURLOPT_POSTFIELDS => json_encode([
         "token"             => $this->authenticate()->token,
         "date_de_commande"  => date('Y/m/d'),
         "numero_colis"      => $params['order']->reference,
         "service"           => array_search($params['order']->id_carrier, $carrierIds),
-        "nom_du_client"     => $addr->firstname . ' ' . $add->lastname,
+        "nom_du_client"     => $addr->firstname . ' ' . $addr->lastname,
         "email_du_client"   => $params['customer']->email,
         "tel_client"        => $addr->phone,
-        "poids"             => array_sum(array_map(function ($x) { return $x['weight']; }, $params->getProducts())),
+        "poids"             => array_sum(array_map(function ($x) { return $x['weight']; }, $params['cart']->getProducts())),
         "adresse1"          => $addr->address1,
         "adresse2"          => $addr->address2,
         "ville"             => $addr->city,
@@ -229,6 +229,7 @@ class Savemypaquet extends CarrierModule {
 		$c = curl_init($this->API_URL. '/auth/login');
 		curl_setopt_array($c, [
 			CURLOPT_POST => TRUE,
+      CURLOPT_VERBOSE => TRUE,
 			CURLOPT_RETURNTRANSFER => TRUE,
 			CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
 			CURLOPT_POSTFIELDS => json_encode(['email' =>  Configuration::get('SMP_LOGIN'), 'password' => Configuration::get('SMP_PASSWORD')])
