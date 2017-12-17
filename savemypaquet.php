@@ -192,8 +192,7 @@ class Savemypaquet extends CarrierModule {
     $c = curl_init($this->API_URL . "/colis/new");
     curl_setopt_array($c, [
       CURLOPT_POST => TRUE,
-      CURLOPT_VERBOSE => TRUE,
-      CURLOPT_POSTFIELDS => json_encode([
+      CURLOPT_POSTFIELDS => [
         "token"             => $this->authenticate()->token,
         "date_de_commande"  => date('Y/m/d'),
         "numero_colis"      => $params['order']->reference,
@@ -211,7 +210,7 @@ class Savemypaquet extends CarrierModule {
         "etage"             => 0,
         "porte_position"    => 0,
         "porte_cote"        => 0
-      ])
+      ]
     ]);
     curl_exec($c);
   }
@@ -229,7 +228,6 @@ class Savemypaquet extends CarrierModule {
 		$c = curl_init($this->API_URL. '/auth/login');
 		curl_setopt_array($c, [
 			CURLOPT_POST => TRUE,
-      CURLOPT_VERBOSE => TRUE,
 			CURLOPT_RETURNTRANSFER => TRUE,
 			CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
 			CURLOPT_POSTFIELDS => json_encode(['email' =>  Configuration::get('SMP_LOGIN'), 'password' => Configuration::get('SMP_PASSWORD')])
