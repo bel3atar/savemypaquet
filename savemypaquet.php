@@ -2,7 +2,8 @@
 if (!defined('_PS_VERSION_')) exit;
 class Savemypaquet extends CarrierModule {
   public $id_carrier;
-  private $API_URL = 'https://testapi.savemypaquet.com/api';
+  private $API_URL = 'https://api.savemypaquet.com/api';
+:w
   private $CARRIERS = [
     'SMP_OPTI_48H' => [
       'name' => 'SaveMyPaquet Optimum 48h',
