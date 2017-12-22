@@ -106,7 +106,9 @@ class Savemypaquet extends CarrierModule {
     $carrierIds = array_combine(Configuration::getMultiple($carrierNames), $carrierNames);
     if (!in_array($this->id_carrier, array_keys($carrierIds))) return false;
 
-		if ($carrierIds[$this->id_carrier] === 'SMP_PREM_24H' and date('h') >= 11) return false;
+    if ($carrierIds[$this->id_carrier] === 'SMP_PREM_24H'
+      and date_create('now', new DateTimeZone('Europe/Paris'))->format('H') >= 11) 
+      return false;
 
     $addr = new Address($params->id_address_delivery);
     $iso = (new Country($addr->id_country))->iso_code;
@@ -166,7 +168,7 @@ class Savemypaquet extends CarrierModule {
     }
   }
   public function hookDisplayCarrierExtraContent($sutff) {
-    $this->context->smarty->assign('smpid', Configuration::get('SMP_CARRIER_ID'));
+    $this->context->smarty->assign('smpids', json_encode(array_values(Configuration::getMultiple(array_keys($this->CARRIERS)))));
     $phone = (new Address($this->context->cart->id_address_delivery))->phone;
     $this->context->smarty->assign('phone', $phone);
     return $this->display(__FILE__, 'displayCarrierExtraContent.tpl');
@@ -190,27 +192,33 @@ class Savemypaquet extends CarrierModule {
 
     $addr = new Address($params['cart']->id_address_delivery);
     $c = curl_init($this->API_URL . "/colis/new");
+    $obj = [
+      "token"               => $this->authenticate()->token,
+      "date_de_commande"    => date('Y/m/d'),
+      "numero_colis"        => $params['order']->reference,
+      "numero_de_commande"  => $params['order']->id,
+      "service"             => [
+        'SMP_PREM_24H' => 2,
+        'SMP_PREM_48H' => 1,
+        'SMP_OPTI_48H' => 0
+      ][array_search($params['order']->id_carrier, $carrierIds)],
+      "nom_du_client"       => $addr->firstname . ' ' . $addr->lastname,
+      "email_du_client"     => $params['customer']->email,
+      "tel_client"          => $addr->phone,
+      "poids"               => array_sum(array_map(function ($x) { return $x['weight']; }, $params['cart']->getProducts())),
+      "adresse1"            => $addr->address1,
+      "adresse2"            => $addr->address2,
+      "ville"               => $addr->city,
+      "code_postal"         => $addr->postcode,
+      "pays"                => "France",
+      "batiment"            => 0,
+      "etage"               => 0,
+      "porte_position"      => 0,
+      "porte_cote"          => 0
+    ];
     curl_setopt_array($c, [
-      CURLOPT_POST => TRUE,
-      CURLOPT_POSTFIELDS => [
-        "token"             => $this->authenticate()->token,
-        "date_de_commande"  => date('Y/m/d'),
-        "numero_colis"      => $params['order']->reference,
-        "service"           => array_search($params['order']->id_carrier, $carrierIds),
-        "nom_du_client"     => $addr->firstname . ' ' . $addr->lastname,
-        "email_du_client"   => $params['customer']->email,
-        "tel_client"        => $addr->phone,
-        "poids"             => array_sum(array_map(function ($x) { return $x['weight']; }, $params['cart']->getProducts())),
-        "adresse1"          => $addr->address1,
-        "adresse2"          => $addr->address2,
-        "ville"             => $addr->city,
-        "code_postal"       => $addr->postcode,
-        "pays"              => "France",
-        "batiment"          => 0,
-        "etage"             => 0,
-        "porte_position"    => 0,
-        "porte_cote"        => 0
-      ]
+      CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+      CURLOPT_POSTFIELDS => json_encode($obj)
     ]);
     curl_exec($c);
   }
@@ -224,14 +232,14 @@ class Savemypaquet extends CarrierModule {
     $this->context->smarty->assign('SMP_PASSWORD', Configuration::get('SMP_PASSWORD'));
     return $this->display(__FILE__, 'getContent.tpl');
   }
-	private function authenticate () {
-		$c = curl_init($this->API_URL. '/auth/login');
-		curl_setopt_array($c, [
-			CURLOPT_POST => TRUE,
-			CURLOPT_RETURNTRANSFER => TRUE,
-			CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-			CURLOPT_POSTFIELDS => json_encode(['email' =>  Configuration::get('SMP_LOGIN'), 'password' => Configuration::get('SMP_PASSWORD')])
-		]);
-		return json_decode(curl_exec($c));
-	}
+  private function authenticate () {
+    $c = curl_init($this->API_URL. '/auth/login');
+    curl_setopt_array($c, [
+      CURLOPT_POST => TRUE,
+      CURLOPT_RETURNTRANSFER => TRUE,
+      CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+      CURLOPT_POSTFIELDS => json_encode(['email' =>  Configuration::get('SMP_LOGIN'), 'password' => Configuration::get('SMP_PASSWORD')])
+    ]);
+    return json_decode(curl_exec($c));
+  }
 }
